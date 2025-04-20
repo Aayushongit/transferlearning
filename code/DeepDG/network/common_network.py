@@ -1,5 +1,8 @@
 # coding=utf-8
+import torch 
 import torch.nn as nn
+import torch.nn.functional as F
+
 from network.util import init_weights
 import torch.nn.utils.weight_norm as weightNorm
 
@@ -51,3 +54,40 @@ class feat_classifier_two(nn.Module):
         x = self.fc0(x)
         x = self.fc1(x)
         return x
+
+
+class feat_classifier_multi(nn.Module):
+    def __init__(self, class_num, input_dim, hidden_dims=[256]):
+        super(feat_classifier_multi, self).__init__()
+        layers = []
+        dims = [input_dim] + hidden_dims
+        
+        for i in range(len(dims) - 1):
+            layers.append(nn.Linear(dims[i], dims[i+1]))
+            layers.append(nn.ReLU(inplace=True))
+        
+        layers.append(nn.Linear(dims[-1], class_num))
+        self.classifier = nn.Sequential(*layers)
+        
+    def forward(self, x):
+        return self.classifier(x)
+
+class feat_classifier_with_temp(nn.Module):
+    def __init__(self, class_num, bottleneck_dim=256, temp=1.0, type="linear"):
+        super(feat_classifier_with_temp, self).__init__()
+        self.temp = temp
+        if type == 'wn':
+            self.fc = weightNorm(
+                nn.Linear(bottleneck_dim, class_num), name="weight")
+        else:
+            self.fc = nn.Linear(bottleneck_dim, class_num)
+        
+    def forward(self, x, apply_temp=True):
+        logits = self.fc(x)
+        if apply_temp:
+            return logits / self.temp
+        else:
+            return logits
+            
+    def set_temp(self, temp):
+        self.temp = temp
